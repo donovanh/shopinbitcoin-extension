@@ -110,6 +110,14 @@
         font-size: 12px;
       }
 
+      .affiliate-disclosure {
+        font-size: 10px;
+        opacity: 0.5;
+        text-align: center;
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+
       .footer {
         font-size: 11px;
         opacity: 0.6;
@@ -123,9 +131,7 @@
   <body>
     <div class="container">
       <div>
-        <h1>
-          ShopIn<span style="color: #f7931a;">₿itcoin</span>
-        </h1>
+        <h1>ShopIn<span style="color: #f7931a">₿itcoin</span></h1>
         <p>See Amazon prices in Bitcoin</p>
       </div>
 
@@ -136,27 +142,29 @@
         </div>
         <div class="rate-update" id="updated"></div>
         <div class="rate-credit">
-          <a href="https://shopinbitcoin.com/" target="_blank" class="rate-link">
+          <a
+            href="https://shopinbitcoin.com/"
+            target="_blank"
+            class="rate-link"
+          >
             Rate provided by shopinbitcoin
           </a>
         </div>
       </div>
 
       <div class="links">
-        <a href="https://shopinbitcoin.com/" target="_blank">
-          Visit ShopInBitcoin
+        <a id="affiliateLink" style="display: none" target="_blank">
+          Use my affiliate link (optional)
         </a>
-        <a
-          href="https://github.com/donovanh/shopinbitcoin-extension"
-          target="_blank"
-        >
-          GitHub
-        </a>
-      </div>
 
-      <div class="footer">Updated every 60 seconds</div>
+        <div class="affiliate-disclosure">
+          As an Amazon Associate I earn from qualifying purchases, if you select
+          the link above.
+        </div>
+      </div>
     </div>
 
+    <script src="config.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

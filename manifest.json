@@ -3,7 +3,8 @@
   "name": "ShopInBitcoin - Amazon to Bitcoin",
   "version": "1.0.0",
   "description": "See Amazon prices in Bitcoin/Satoshis on any Amazon store worldwide",
-  "permissions": ["scripting", "activeTab"],
+  "incognito": "not_allowed",
+  "permissions": ["scripting", "activeTab", "tabs"],
   "background": {
     "service_worker": "service-worker.js"
   },

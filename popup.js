@@ -5,6 +5,49 @@
 
 const rateElement = document.getElementById("rate");
 const updatedElement = document.getElementById("updated");
+const affiliateLink = document.getElementById("affiliateLink");
+const affiliateDisclosure = document.querySelector(".affiliate-disclosure");
+
+/**
+ * Build affiliate link from current Amazon page
+ * @returns {string|null} Affiliate URL or null if no affiliate tag configured
+ */
+async function getAffiliateLink() {
+  try {
+    // Get the currently active tab
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tabs.length) return null;
+
+    const tabUrl = tabs[0].url;
+
+    // Check if this is an Amazon URL
+    if (!tabUrl || !tabUrl.includes("amazon.")) return null;
+
+    // Detect locale from hostname
+    let locale = 'com';
+    if (tabUrl.includes("amazon.co.uk")) locale = 'uk';
+    else if (tabUrl.includes("amazon.de")) locale = 'de';
+    else if (tabUrl.includes("amazon.fr")) locale = 'fr';
+    else if (tabUrl.includes("amazon.es")) locale = 'es';
+    else if (tabUrl.includes("amazon.it")) locale = 'it';
+    else if (tabUrl.includes("amazon.ca")) locale = 'ca';
+    else if (tabUrl.includes("amazon.com.au")) locale = 'au';
+    else if (tabUrl.includes("amazon.jp")) locale = 'jp';
+    else if (tabUrl.includes("amazon.in")) locale = 'in';
+
+    // Get config for locale
+    const config = LOCALE_CONFIG[locale];
+    if (!config || !config.affiliateTag) return null;
+
+    // Build affiliate URL by adding tag parameter
+    const url = new URL(tabUrl);
+    url.searchParams.set("tag", config.affiliateTag);
+    return url.toString();
+  } catch (error) {
+    console.error("[ShopInBitcoin Popup] Error building affiliate link:", error);
+    return null;
+  }
+}
 
 /**
  * Fetch current BTC rate via service worker
@@ -20,23 +63,29 @@ async function updateRate() {
         resolve(null);
       }, 5000); // 5 second timeout
 
-      chrome.runtime.sendMessage(
-        {
-          action: "getBtcRate",
-          krakenPair: "XBTUSD",
-          krakenKey: "XXBTZUSD",
-        },
-        (response) => {
-          clearTimeout(timeout);
+      try {
+        chrome.runtime.sendMessage(
+          {
+            action: "getBtcRate",
+            krakenPair: "XBTUSD",
+            krakenKey: "XXBTZUSD",
+          },
+          (response) => {
+            clearTimeout(timeout);
 
-          if (response?.rate) {
-            resolve(response.rate);
-          } else {
-            console.error("[ShopInBitcoin Popup] Failed to fetch rate:", response?.error);
-            resolve(null);
+            if (response?.rate) {
+              resolve(response.rate);
+            } else {
+              console.error("[ShopInBitcoin Popup] Failed to fetch rate:", response?.error);
+              resolve(null);
+            }
           }
-        }
-      );
+        );
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error("[ShopInBitcoin Popup] Extension context error:", error);
+        resolve(null);
+      }
     });
 
     if (!rate) {
@@ -66,8 +115,27 @@ async function updateRate() {
   }
 }
 
+/**
+ * Setup affiliate link if available for current page
+ */
+async function setupAffiliateLink() {
+  const link = await getAffiliateLink();
+
+  if (link) {
+    affiliateLink.href = link;
+    affiliateLink.style.display = "block";
+    affiliateDisclosure.style.display = "block";
+  } else {
+    affiliateLink.style.display = "none";
+    affiliateDisclosure.style.display = "none";
+  }
+}
+
 // Update rate immediately on open
 updateRate();
+
+// Setup affiliate link if available
+setupAffiliateLink();
 
 // Update rate every 60 seconds while popup is open
 const interval = setInterval(updateRate, 60000);

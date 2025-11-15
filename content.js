@@ -92,31 +92,40 @@ async function getBtcRate() {
       resolve(null);
     }, 5000); // 5 second timeout
 
-    chrome.runtime.sendMessage(
-      {
-        action: "getBtcRate",
-        krakenPair: config.krakenPair,
-        krakenKey: config.krakenKey,
-      },
-      (response) => {
-        clearTimeout(timeout);
+    try {
+      chrome.runtime.sendMessage(
+        {
+          action: "getBtcRate",
+          krakenPair: config.krakenPair,
+          krakenKey: config.krakenKey,
+        },
+        (response) => {
+          clearTimeout(timeout);
 
-        if (response?.rate) {
-          resolve(response.rate);
-        } else {
-          console.error("[AtoB] Failed to fetch BTC rate:", response?.error);
-          resolve(null);
+          if (response?.rate) {
+            resolve(response.rate);
+          } else {
+            console.error("[AtoB] Failed to fetch BTC rate:", response?.error);
+            resolve(null);
+          }
         }
-      }
-    );
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error("[AtoB] Extension context error:", error);
+      resolve(null);
+    }
   });
 }
 
 /**
- * Extract product price from Amazon page DOM
- * @returns {Object|null} Object with {price, element} or null if not found
+ * Extract all product prices from Amazon page DOM
+ * @returns {Array} Array of {price, element} objects
  */
-function getAmazonPrice() {
+function getAllAmazonPrices() {
+  const prices = [];
+  const seenTexts = new Set(); // Avoid duplicates (same price text)
+
   // Comprehensive selector list covering different Amazon layouts
   const selectors = [
     // Desktop product page - main price
@@ -138,10 +147,16 @@ function getAmazonPrice() {
     const elements = document.querySelectorAll(selector);
 
     for (const element of elements) {
+      // Skip if already processed
+      if (processedElements.has(element)) continue;
+
       // Skip hidden elements
       if (element.offsetHeight === 0 || element.offsetWidth === 0) continue;
 
       const text = element.textContent.trim();
+
+      // Skip if we've already found this price text (avoid duplicates)
+      if (seenTexts.has(text)) continue;
 
       // Match currency symbol + number (allows for various formats)
       const match = text.match(
@@ -155,24 +170,27 @@ function getAmazonPrice() {
 
         // Sanity check: price should be reasonable
         if (price > 0.01 && price < 100000) {
+          seenTexts.add(text);
+          prices.push({ price, element });
           console.log("[AtoB] Found price:", price, "in element:", element);
-          return { price, element };
         }
       }
     }
   }
 
   // Debug: log what we're seeing
-  console.log(
-    "[AtoB] Price search - total elements checked:",
-    document.querySelectorAll("span").length
-  );
-  console.log(
-    "[AtoB] Visible spans:",
-    document.querySelectorAll("span:not([style*='display: none'])").length
-  );
+  if (prices.length === 0) {
+    console.log(
+      "[AtoB] Price search - total elements checked:",
+      document.querySelectorAll("span").length
+    );
+    console.log(
+      "[AtoB] Visible spans:",
+      document.querySelectorAll("span:not([style*='display: none'])").length
+    );
+  }
 
-  return null;
+  return prices;
 }
 
 // Get ASIN from URL or page data
@@ -215,7 +233,7 @@ function createInlinePriceText(sats) {
 // Keep track of processed price elements to avoid duplicates
 const processedElements = new WeakSet();
 
-// Main function - inject BTC price to page
+// Main function - inject BTC prices to page
 async function injectBtcPrice() {
   try {
     // Get BTC rate
@@ -225,21 +243,6 @@ async function injectBtcPrice() {
       return;
     }
 
-    // Get product price
-    const priceData = getAmazonPrice();
-    if (!priceData) {
-      console.log("[AtoB] Could not find product price");
-      return;
-    }
-
-    const { price: usdPrice, element: priceElement } = priceData;
-
-    // Skip if we've already processed this element
-    if (processedElements.has(priceElement)) {
-      return;
-    }
-    processedElements.add(priceElement);
-
     // Get config for this locale
     const config = getLocaleConfig();
     if (!config) {
@@ -247,30 +250,43 @@ async function injectBtcPrice() {
       return;
     }
 
-    // Convert to sats
-    const sats = toSats(usdPrice, btcRate);
-    if (!sats) {
-      console.log("[AtoB] Could not convert price to sats");
+    // Get all product prices
+    const priceDataList = getAllAmazonPrices();
+    if (priceDataList.length === 0) {
+      console.log("[AtoB] Could not find any product prices");
       return;
     }
 
-    // Remove any existing price text we added next to this element
-    const existingPrice = priceElement.parentElement?.querySelector(
-      '[data-atob-price="true"]'
-    );
-    if (existingPrice) {
-      existingPrice.remove();
-    }
+    // Process each price
+    for (const { price: usdPrice, element: priceElement } of priceDataList) {
+      // Mark as processed
+      processedElements.add(priceElement);
 
-    // Create and insert inline price text
-    const priceText = createInlinePriceText(sats);
-    if (priceElement && priceElement.parentElement) {
-      priceElement.parentElement.insertAdjacentElement("afterend", priceText);
-    } else {
-      document.body.insertAdjacentElement("afterbegin", priceText);
-    }
+      // Convert to sats
+      const sats = toSats(usdPrice, btcRate);
+      if (!sats) {
+        console.log("[AtoB] Could not convert price to sats");
+        continue;
+      }
 
-    console.log("[AtoB] Bitcoin price injected:", formatSats(sats));
+      // Remove any existing price text we added next to this element
+      const existingPrice = priceElement.parentElement?.querySelector(
+        '[data-atob-price="true"]'
+      );
+      if (existingPrice) {
+        existingPrice.remove();
+      }
+
+      // Create and insert inline price text
+      const priceText = createInlinePriceText(sats);
+      if (priceElement && priceElement.parentElement) {
+        priceElement.parentElement.insertAdjacentElement("afterend", priceText);
+      } else {
+        document.body.insertAdjacentElement("afterbegin", priceText);
+      }
+
+      console.log("[AtoB] Bitcoin price injected:", formatSats(sats));
+    }
   } catch (error) {
     console.error("[AtoB] Error injecting Bitcoin price:", error);
   }
@@ -304,7 +320,7 @@ try {
       } catch (error) {
         console.error("[AtoB] Error during dynamic injection:", error);
       }
-    }, 500);
+    }, 150);
   });
 
   observer.observe(document.body, {
