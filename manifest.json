@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "ShopInBitcoin - Amazon to Bitcoin",
+  "version": "1.0.0",
+  "description": "See Amazon prices in Bitcoin/Satoshis on any Amazon store worldwide",
+  "permissions": ["scripting", "activeTab"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "host_permissions": [
+    "https://*.amazon.com/*",
+    "https://*.amazon.co.uk/*",
+    "https://*.amazon.de/*",
+    "https://*.amazon.fr/*",
+    "https://*.amazon.es/*",
+    "https://*.amazon.it/*",
+    "https://*.amazon.ca/*",
+    "https://*.amazon.com.au/*",
+    "https://*.amazon.jp/*",
+    "https://*.amazon.in/*"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ShopInBitcoin - Amazon to Bitcoin"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.amazon.com/*",
+        "https://*.amazon.co.uk/*",
+        "https://*.amazon.de/*",
+        "https://*.amazon.fr/*",
+        "https://*.amazon.es/*",
+        "https://*.amazon.it/*",
+        "https://*.amazon.ca/*",
+        "https://*.amazon.com.au/*",
+        "https://*.amazon.jp/*",
+        "https://*.amazon.in/*"
+      ],
+      "js": ["config.js", "content.js"]
+    }
+  ]
+}
