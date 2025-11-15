@@ -12,6 +12,7 @@ const LOCALE_CONFIG = {
     symbol: '$',
     krakenPair: 'XBTUSD',
     krakenKey: 'XXBTZUSD',
+    affiliateTag: 'shopireland00-20',
   },
   // UK - Direct BTC/GBP pair
   'uk': {
@@ -19,6 +20,7 @@ const LOCALE_CONFIG = {
     symbol: '£',
     krakenPair: 'XBTGBP',
     krakenKey: 'XXBTZGBP',
+    affiliateTag: 'shopirelandie-21',
   },
   // Germany, France, Spain, Italy (all use EUR) - Direct BTC/EUR pair
   'de': {
@@ -26,6 +28,7 @@ const LOCALE_CONFIG = {
     symbol: '€',
     krakenPair: 'XBTEUR',
     krakenKey: 'XXBTZEUR',
+    affiliateTag: 'cssanimation-21',
   },
   'fr': {
     currency: 'EUR',
