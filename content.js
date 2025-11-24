@@ -281,7 +281,10 @@ async function replacePriceInSpans(priceInfo, btcRateCache) {
 
   // Replace price with sats (original)
   const replacement = `${formatSats(sats)} sats (${fullPrice})`;
-  container.textContent = replacement;
+
+  // Create a text node to replace the entire container
+  const textNode = document.createTextNode(replacement);
+  container.replaceWith(textNode);
   replacedPrices.add(fullPrice);
 
   console.log(`[AtoB] Replaced "${fullPrice}" with "${replacement}"`);
