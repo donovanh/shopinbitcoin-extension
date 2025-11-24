@@ -212,8 +212,9 @@ function getASIN() {
   return null;
 }
 
-// Keep track of processed text nodes to avoid duplicates
+// Keep track of processed elements to avoid duplicates
 const processedNodes = new WeakSet();
+const processedContainers = new WeakSet();
 const replacedPrices = new Set();
 
 /**
@@ -290,7 +291,8 @@ function reconstructPriceFromSpans(element) {
 async function replacePriceInSpans(priceInfo, btcRateCache) {
   const { fullPrice, currency, container } = priceInfo;
 
-  if (replacedPrices.has(fullPrice)) return false;
+  // Skip if already processed
+  if (processedContainers.has(container)) return false;
   if (!currency) return false;
 
   // Get BTC rate for this currency
@@ -308,22 +310,31 @@ async function replacePriceInSpans(priceInfo, btcRateCache) {
   const sats = toSats(price, btcRate);
   if (!sats) return false;
 
-  // Create a new div with bold sats conversion on a new line
-  const satsDiv = document.createElement('div');
-  satsDiv.style.fontSize = 'inherit';
-  satsDiv.style.color = 'inherit';
-  satsDiv.style.fontFamily = 'inherit';
-  satsDiv.style.marginTop = '2px';
+  // Create inline sats in brackets after the price
+  const satsSpan = document.createElement('span');
+  satsSpan.style.fontSize = 'inherit';
+  satsSpan.style.color = 'inherit';
+  satsSpan.style.fontFamily = 'inherit';
+  satsSpan.style.marginLeft = '4px';
 
   const boldSpan = document.createElement('strong');
   boldSpan.textContent = `${formatSats(sats)} sats`;
-  satsDiv.appendChild(boldSpan);
+
+  const bracketBefore = document.createTextNode(' (');
+  const bracketAfter = document.createTextNode(')');
+
+  satsSpan.appendChild(bracketBefore);
+  satsSpan.appendChild(boldSpan);
+  satsSpan.appendChild(bracketAfter);
 
   // Insert after the price container
-  if (container.parentElement) {
-    container.parentElement.insertAdjacentElement('afterend', satsDiv);
+  if (container.nextSibling) {
+    container.parentElement.insertBefore(satsSpan, container.nextSibling);
+  } else if (container.parentElement) {
+    container.parentElement.appendChild(satsSpan);
   }
 
+  processedContainers.add(container);
   replacedPrices.add(fullPrice);
 
   console.log(`[AtoB] Added sats for "${fullPrice}": ${formatSats(sats)} sats`);
@@ -336,22 +347,27 @@ async function replacePriceInSpans(priceInfo, btcRateCache) {
 function findAllPriceContainers(root) {
   const containers = new Set();
 
-  // Find by Amazon price classes
-  document.querySelectorAll('.a-price-symbol, .a-price-whole, .a-price-fraction').forEach(el => {
-    const container = el.closest('[data-a-price], .a-price, [data-price]');
-    if (container) containers.add(container);
-  });
-
   // Find by looking for elements that contain price patterns
-  document.querySelectorAll('span, div, p').forEach(el => {
-    if (!el.querySelector('script, style, noscript')) {
-      const text = el.textContent;
-      // Quick check if contains what looks like a price
-      if (/[$€£¥₹]|USD|EUR|GBP|JPY|INR/.test(text) && /[0-9]+[.,][0-9]+/.test(text)) {
-        // Check if it's a small, focused element (likely a price)
-        if (text.length < 100) {
-          containers.add(el);
-        }
+  // Only look at spans and divs that are relatively small (likely price elements)
+  document.querySelectorAll('span, div').forEach(el => {
+    // Skip if already processed
+    if (processedContainers.has(el)) return;
+
+    // Skip if has script/style
+    if (el.querySelector('script, style, noscript')) return;
+
+    // Skip if any child already has sats added (our own element)
+    if (el.textContent.includes('sats)')) return;
+
+    const text = el.textContent.trim();
+
+    // Quick check if contains what looks like a price
+    // Must have currency symbol/code and number.number format
+    if (/[$€£¥₹]|USD|EUR|GBP|JPY|INR/.test(text) && /[0-9]+[.,][0-9]+/.test(text)) {
+      // Check if it's a small, focused element (likely a price, not a whole section)
+      // And the ENTIRE text should be price-like (not embedded in longer text)
+      if (text.length < 30 && /^[\s$€£¥₹0-9.,()]*$/.test(text)) {
+        containers.add(el);
       }
     }
   });
@@ -405,7 +421,7 @@ async function injectBtcPrice() {
     // Then, catch any remaining prices by aggressive search
     const priceContainers = findAllPriceContainers(document.body);
     for (const container of priceContainers) {
-      if (!processedNodes.has(container)) {
+      if (!processedContainers.has(container)) {
         // Try to extract price from this element
         const text = container.textContent.trim();
 
@@ -428,23 +444,31 @@ async function injectBtcPrice() {
                 if (btcRate) {
                   const sats = toSats(price, btcRate);
                   if (sats) {
-                    // Create a new div with bold sats
-                    const satsDiv = document.createElement('div');
-                    satsDiv.style.fontSize = 'inherit';
-                    satsDiv.style.color = 'inherit';
-                    satsDiv.style.fontFamily = 'inherit';
-                    satsDiv.style.marginTop = '2px';
+                    // Create inline sats in brackets after the price
+                    const satsSpan = document.createElement('span');
+                    satsSpan.style.fontSize = 'inherit';
+                    satsSpan.style.color = 'inherit';
+                    satsSpan.style.fontFamily = 'inherit';
+                    satsSpan.style.marginLeft = '4px';
 
                     const boldSpan = document.createElement('strong');
                     boldSpan.textContent = `${formatSats(sats)} sats`;
-                    satsDiv.appendChild(boldSpan);
 
-                    if (container.parentElement) {
-                      container.parentElement.insertAdjacentElement('afterend', satsDiv);
+                    const bracketBefore = document.createTextNode(' (');
+                    const bracketAfter = document.createTextNode(')');
+
+                    satsSpan.appendChild(bracketBefore);
+                    satsSpan.appendChild(boldSpan);
+                    satsSpan.appendChild(bracketAfter);
+
+                    if (container.nextSibling) {
+                      container.parentElement.insertBefore(satsSpan, container.nextSibling);
+                    } else if (container.parentElement) {
+                      container.parentElement.appendChild(satsSpan);
                     }
 
                     replacedPrices.add(fullMatch);
-                    processedNodes.add(container);
+                    processedContainers.add(container);
                     console.log(`[AtoB] Added sats for "${fullMatch}": ${formatSats(sats)} sats`);
                     break;
                   }
@@ -466,15 +490,38 @@ async function injectBtcPrice() {
 // Check if extension is enabled before running
 async function checkAndInject() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['extensionEnabled'], (result) => {
-      const enabled = result.extensionEnabled !== false;
-      if (enabled) {
-        injectBtcPrice().then(resolve).catch(resolve);
-      } else {
-        console.log("[AtoB] Extension is disabled");
-        resolve();
-      }
-    });
+    // Check if chrome extension API is available
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      resolve();
+      return;
+    }
+
+    try {
+      chrome.storage.local.get(['extensionEnabled'], (result) => {
+        try {
+          // Check if context is still valid
+          if (chrome.runtime.lastError) {
+            resolve();
+            return;
+          }
+
+          const enabled = result.extensionEnabled !== false;
+          if (enabled) {
+            injectBtcPrice()
+              .then(() => resolve())
+              .catch(() => resolve());
+          } else {
+            resolve();
+          }
+        } catch (error) {
+          // Context invalidated inside callback
+          resolve();
+        }
+      });
+    } catch (error) {
+      // Context invalidated on the call itself
+      resolve();
+    }
   });
 }
 

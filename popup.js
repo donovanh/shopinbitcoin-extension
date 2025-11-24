@@ -181,6 +181,17 @@ setupAffiliateLink();
 // Load extension state
 loadExtensionState();
 
+// Add QR code if available
+if (typeof QR_CODE_PNG !== 'undefined') {
+  const qrContainer = document.getElementById('qrCodeContainer');
+  const qrImg = document.createElement('img');
+  qrImg.src = QR_CODE_PNG;
+  qrImg.alt = 'Bitcoin Address QR Code';
+  qrImg.style.maxWidth = '150px';
+  qrImg.style.borderRadius = '4px';
+  qrContainer.appendChild(qrImg);
+}
+
 // Handle extension toggle
 extensionToggle.addEventListener('change', async (e) => {
   await saveExtensionState(e.target.checked);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ShopInBitcoin - Amazon to Bitcoin",
+  "name": "ShopInBitcoin - Amazon in Bitcoin",
   "version": "1.0.0",
-  "description": "See Amazon prices in Bitcoin/Satoshis on any Amazon store worldwide",
+  "description": "See Amazon prices in Bitcoin",
   "incognito": "not_allowed",
   "permissions": ["activeTab", "tabs", "storage"],
   "background": {
@@ -27,7 +27,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ShopInBitcoin - Amazon to Bitcoin"
+    "default_title": "ShopInBitcoin - Amazon in Bitcoin"
   },
   "content_scripts": [
     {

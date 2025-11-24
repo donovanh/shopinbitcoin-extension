@@ -101,6 +101,21 @@
         border-color: rgba(255, 255, 255, 0.2);
       }
 
+      .affiliate-disclosure a {
+        display: inline;
+        padding: 0;
+        background: none;
+        border: none;
+        font-size: 13px;
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .affiliate-disclosure a:hover {
+        background: none;
+        border: none;
+      }
+
       .loading {
         color: rgba(255, 255, 255, 0.7);
       }
@@ -130,17 +145,23 @@
   </head>
   <body>
     <div class="container">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div
+        style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        "
+      >
         <div>
           <h1>ShopIn<span style="color: #f7931a">₿itcoin</span></h1>
           <p>See Amazon prices in Bitcoin</p>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <label for="extensionToggle" style="font-size: 12px; margin: 0;">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <label for="extensionToggle" style="font-size: 12px; margin: 0">
             <input
               type="checkbox"
               id="extensionToggle"
-              style="margin: 0; cursor: pointer;"
+              style="margin: 0; cursor: pointer"
               checked
             />
             Enabled
@@ -156,34 +177,83 @@
         <div class="rate-update" id="updated"></div>
       </div>
 
-      <div class="tip-section" id="tipSection" style="background: rgba(247, 147, 26, 0.1); border-radius: 8px; padding: 12px; border: 1px solid rgba(247, 147, 26, 0.3);">
-        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; margin-bottom: 6px;">Support this extension</div>
-        <p style="margin: 0 0 8px 0; font-size: 12px;">Tip with Bitcoin:</p>
-        <div style="font-family: 'Courier New', monospace; font-size: 11px; word-break: break-all; background: rgba(0, 0, 0, 0.2); padding: 8px; border-radius: 4px; margin-bottom: 8px; cursor: pointer;" id="bitcoinAddress">
+      <div
+        class="tip-section"
+        id="tipSection"
+        style="
+          background: rgba(247, 147, 26, 0.1);
+          border-radius: 8px;
+          padding: 12px;
+          border: 1px solid rgba(247, 147, 26, 0.3);
+        "
+      >
+        <div
+          style="
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+            margin-bottom: 6px;
+          "
+        >
+          Support this extension
+        </div>
+        <p style="margin: 0 0 8px 0; font-size: 12px">Tip with Bitcoin:</p>
+        <div
+          style="
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            word-break: break-all;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            cursor: pointer;
+          "
+          id="bitcoinAddress"
+        >
           BC1QARH9CQG2PGQF4CNEYEKH9J83KT34M93KUSDX06
         </div>
-        <button id="copyButton" style="width: 100%; padding: 8px; background: rgba(247, 147, 26, 0.3); border: 1px solid rgba(247, 147, 26, 0.5); border-radius: 4px; color: white; font-size: 12px; font-weight: 600; cursor: pointer; transition: background 0.2s;">
+        <button
+          id="copyButton"
+          style="
+            width: 100%;
+            padding: 8px;
+            background: rgba(247, 147, 26, 0.3);
+            border: 1px solid rgba(247, 147, 26, 0.5);
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+          "
+        >
           Click to copy address
         </button>
-        <p style="margin: 8px 0 0 0; font-size: 10px; opacity: 0.7;">Or scan:</p>
-        <div style="font-family: 'Courier New', monospace; font-size: 10px; word-break: break-all; margin-top: 4px; opacity: 0.7;">
-          bitcoin:BC1QARH9CQG2PGQF4CNEYEKH9J83KT34M93KUSDX06
-        </div>
+        <p style="margin: 8px 0 0 0; font-size: 10px; opacity: 0.7">Or scan:</p>
+        <div
+          id="qrCodeContainer"
+          style="margin-top: 8px; text-align: center"
+        ></div>
       </div>
 
       <div class="links">
         <a id="affiliateLink" style="display: none" target="_blank">
-          Use my affiliate link (optional)
+          Use my Amazon affiliate link
         </a>
 
         <div class="affiliate-disclosure">
-          As an Amazon Associate I earn from qualifying purchases, if you select
-          the link above.
+          Selecting the above visits Amazon with an affiliate cookie set. This
+          helps support the development of
+          <a href="https://shopinbitcoin.com">ShopInBitcoin.com</a>. <br />As an
+          Amazon Associate I earn from qualifying purchases.
         </div>
       </div>
     </div>
 
     <script src="config.js"></script>
+    <script src="qr-code.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
