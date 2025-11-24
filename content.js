@@ -212,7 +212,84 @@ function parsePrice(priceString) {
 }
 
 /**
- * Process text nodes and replace prices
+ * Reconstruct price from Amazon's multi-span structure
+ * E.g., <span class="a-price-symbol">$</span><span class="a-price-whole">6</span><span class="a-price-decimal">.</span><span class="a-price-fraction">79</span>
+ */
+function reconstructPriceFromSpans(element) {
+  const priceContainer = element.closest('[data-a-price], .a-price, [data-price]') || element.parentElement;
+  if (!priceContainer) return null;
+
+  const parts = [];
+  let currency = null;
+
+  // Get all text from relevant spans
+  const symbolSpan = priceContainer.querySelector('.a-price-symbol');
+  if (symbolSpan) {
+    currency = getCurrencyFromMatch(symbolSpan.textContent);
+    parts.push(symbolSpan.textContent);
+  }
+
+  const wholeSpan = priceContainer.querySelector('.a-price-whole');
+  if (wholeSpan) {
+    // Include the whole part and any decimals within it
+    parts.push(wholeSpan.textContent);
+  }
+
+  const decimalSpan = priceContainer.querySelector('.a-price-decimal');
+  if (decimalSpan) {
+    parts.push(decimalSpan.textContent);
+  }
+
+  const fractionSpan = priceContainer.querySelector('.a-price-fraction');
+  if (fractionSpan) {
+    parts.push(fractionSpan.textContent);
+  }
+
+  const fullPrice = parts.join('');
+  if (!fullPrice) return null;
+
+  return {
+    fullPrice,
+    currency: currency || getCurrencyFromMatch(fullPrice),
+    container: priceContainer,
+  };
+}
+
+/**
+ * Replace price in Amazon's span structure
+ */
+async function replacePriceInSpans(priceInfo, btcRateCache) {
+  const { fullPrice, currency, container } = priceInfo;
+
+  if (replacedPrices.has(fullPrice)) return false;
+  if (!currency) return false;
+
+  // Get BTC rate for this currency
+  if (!btcRateCache[currency]) {
+    btcRateCache[currency] = await getBtcRateForCurrency(currency);
+  }
+
+  const btcRate = btcRateCache[currency];
+  if (!btcRate) return false;
+
+  const price = parsePrice(fullPrice);
+  if (!price) return false;
+
+  // Convert to sats
+  const sats = toSats(price, btcRate);
+  if (!sats) return false;
+
+  // Replace price with sats (original)
+  const replacement = `${formatSats(sats)} sats (${fullPrice})`;
+  container.textContent = replacement;
+  replacedPrices.add(fullPrice);
+
+  console.log(`[AtoB] Replaced "${fullPrice}" with "${replacement}"`);
+  return true;
+}
+
+/**
+ * Process text nodes and replace prices (both span-based and text-based)
  */
 async function walkAndReplacePrices(node, btcRateCache) {
   if (node.nodeType === Node.TEXT_NODE) {
@@ -289,6 +366,22 @@ async function walkAndReplacePrices(node, btcRateCache) {
     node.nodeType === Node.ELEMENT_NODE &&
     !["SCRIPT", "STYLE", "NOSCRIPT"].includes(node.nodeName)
   ) {
+    // Check if this is an Amazon price span structure
+    if (node.classList.contains('a-price-symbol') ||
+        node.classList.contains('a-price-whole') ||
+        node.classList.contains('a-price-fraction')) {
+
+      const priceContainer = node.closest('[data-a-price], .a-price, [data-price]');
+      if (priceContainer && !processedNodes.has(priceContainer)) {
+        const priceInfo = reconstructPriceFromSpans(node);
+        if (priceInfo) {
+          await replacePriceInSpans(priceInfo, btcRateCache);
+          processedNodes.add(priceContainer);
+          return; // Skip recursion for this container
+        }
+      }
+    }
+
     // Recursively process child nodes
     for (let child of Array.from(node.childNodes)) {
       await walkAndReplacePrices(child, btcRateCache);
