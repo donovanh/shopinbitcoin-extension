@@ -92,28 +92,34 @@ async function getBtcRate() {
 /**
  * Currency detection regex patterns
  * Matches: $12.34, €12.34, EUR 12.34, £12.34, etc.
+ * Handles comma and period as decimal separators, handles whitespace variations
  */
 const PRICE_PATTERNS = [
-  // Symbol-based: $12.34, €12.34, £12.34, ¥12.34, ₹12.34
+  // Symbol-based: $12.34, $12,34, € 12.34, etc. (with optional space)
   /[$€£¥₹]\s*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/g,
-  // Currency name: USD 12.34, EUR 12.34, GBP 12.34, JPY 12.34, etc.
-  /(USD|EUR|GBP|CAD|AUD|JPY|INR)\s+([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/gi,
+  // Currency code at start: USD 12.34, EUR12.34, GBP 12,34, etc.
+  /(USD|EUR|GBP|CAD|AUD|JPY|INR)\s*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/gi,
+  // Numbers with currency symbol after: 12.34$, 12.34€, 12,34 EUR, etc.
+  /([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)\s*[$€£¥₹]/g,
+  // Numbers with currency code after: 12.34 USD, 12.34EUR, 12,34 GBP, etc.
+  /([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)\s*(USD|EUR|GBP|CAD|AUD|JPY|INR)/gi,
 ];
 
 /**
  * Extract currency from price match
+ * Handles: $12.34, 12.34$, USD 12.34, 12.34 USD, etc.
  */
 function getCurrencyFromMatch(match) {
   if (!match) return null;
 
-  // Check for currency symbol
+  // Check for currency symbol (anywhere in match)
   if (match.includes('$')) return '$';
   if (match.includes('€')) return '€';
   if (match.includes('£')) return '£';
   if (match.includes('¥')) return '¥';
   if (match.includes('₹')) return '₹';
 
-  // Check for currency code
+  // Check for currency code (anywhere in match)
   const currencyMatch = match.match(/(USD|EUR|GBP|CAD|AUD|JPY|INR)/i);
   return currencyMatch ? currencyMatch[1].toUpperCase() : null;
 }
@@ -222,9 +228,18 @@ async function walkAndReplacePrices(node, btcRateCache) {
       const matches = [];
 
       while ((match = pattern.exec(text)) !== null) {
+        // Extract the number part (could be in group 1 or 2 depending on pattern)
+        let priceStr = null;
+        for (let i = 1; i < match.length; i++) {
+          if (match[i] && /[0-9]/.test(match[i])) {
+            priceStr = match[i];
+            break;
+          }
+        }
+
         matches.push({
           fullMatch: match[0],
-          priceStr: match[1] || match[2],
+          priceStr,
           index: match.index,
         });
       }
