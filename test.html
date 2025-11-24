@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ShopInBitcoin Extension Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-case {
+      background: white;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #f7931a;
+    }
+    .test-case h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .price-display {
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-family: monospace;
+      border: 1px solid #e0e0e0;
+    }
+    .log {
+      background: #1a1a1a;
+      color: #0f0;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ShopInBitcoin Extension Test Suite</h1>
+
+  <div class="test-case">
+    <h3>Test 1: EUR with multi-span (from actual Amazon)</h3>
+    <div class="price-display" id="test1">
+      <div class="a-section a-spacing-none aok-align-center aok-relative">
+        <span class="aok-offscreen"> EUR&nbsp;13.64 </span>
+        <span class="a-price aok-align-center centralizedApexPricePriceToPayMargin" data-a-size="xl" data-a-color="base">
+          <span class="a-offscreen"> </span>
+          <span aria-hidden="true">
+            <span class="a-price-symbol">EUR</span>
+            <span class="a-price-whole">13<span class="a-price-decimal">.</span></span>
+            <span class="a-price-fraction">64</span>
+          </span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="test-case">
+    <h3>Test 2: USD with multi-span</h3>
+    <div class="price-display" id="test2">
+      <span aria-hidden="true">
+        <span class="a-price-symbol">$</span>
+        <span class="a-price-whole">6<span class="a-price-decimal">.</span></span>
+        <span class="a-price-fraction">79</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="test-case">
+    <h3>Test 3: Simple text-based price</h3>
+    <div class="price-display" id="test3">
+      Price: $12.99
+    </div>
+  </div>
+
+  <div class="test-case">
+    <h3>Test 4: Multiple prices in one container</h3>
+    <div class="price-display" id="test4">
+      Original: $19.99, Sale: $9.99, Savings: 50%
+    </div>
+  </div>
+
+  <div class="test-case">
+    <h3>Test 5: EUR with text node</h3>
+    <div class="price-display" id="test5">
+      Price: EUR 25.50
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <script>
+    // Mock chrome API for testing
+    window.chrome = window.chrome || {};
+    window.chrome.runtime = {
+      lastError: null,
+      sendMessage: (message, callback) => {
+        // Mock exchange rates
+        const rates = {
+          'EUR': 1.08, // 1 EUR = 1.08 USD equivalent for BTC
+          'USD': 43256,
+          'GBP': 54570,
+        };
+
+        setTimeout(() => {
+          let rate = rates['USD']; // Default to USD rate
+
+          if (message.krakenPair === 'XBTEUR') rate = 40000; // EUR/BTC
+          else if (message.krakenPair === 'XBTUSD') rate = 43256;
+          else if (message.krakenPair === 'XBTGBP') rate = 34400;
+
+          callback({ rate });
+        }, 10);
+      }
+    };
+
+    window.chrome.storage = {
+      local: {
+        get: (keys, callback) => {
+          callback({ extensionEnabled: true });
+        }
+      }
+    };
+
+    // Mock config
+    window.getLocaleConfig = () => ({
+      currency: 'EUR',
+      symbol: '€',
+      krakenPair: 'XBTEUR',
+      krakenKey: 'XXBTZEUR',
+    });
+
+    // Log helper
+    const logEl = document.getElementById('log');
+    const originalLog = console.log;
+    const originalError = console.error;
+
+    console.log = function(...args) {
+      originalLog(...args);
+      const msg = args.join(' ');
+      logEl.textContent += msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    console.error = function(...args) {
+      originalError(...args);
+      const msg = args.join(' ');
+      logEl.textContent += '[ERROR] ' + msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+  </script>
+
+  <script src="content.js"></script>
+
+  <script>
+    // After content.js loads, test the reconstruction function
+    setTimeout(() => {
+      console.log('=== Starting reconstruction tests ===');
+
+      // Test 1: EUR with nested decimal
+      const test1Container = document.querySelector('[data-a-size="xl"]');
+      if (test1Container) {
+        const symbolSpan = test1Container.querySelector('.a-price-symbol');
+        if (symbolSpan) {
+          const result = reconstructPriceFromSpans(symbolSpan);
+          console.log('Test 1 (EUR nested):', result);
+        }
+      }
+
+      // Test 2: USD with nested decimal
+      const test2Symbol = document.getElementById('test2').querySelector('.a-price-symbol');
+      if (test2Symbol) {
+        const result = reconstructPriceFromSpans(test2Symbol);
+        console.log('Test 2 (USD nested):', result);
+      }
+
+      console.log('=== Reconstruction tests complete ===');
+    }, 100);
+  </script>
+</body>
+</html>

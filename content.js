@@ -73,6 +73,13 @@ async function getBtcRate() {
         (response) => {
           clearTimeout(timeout);
 
+          // Check if extension context is still valid
+          if (chrome.runtime.lastError) {
+            console.error("[AtoB] Extension context error:", chrome.runtime.lastError.message);
+            resolve(null);
+            return;
+          }
+
           if (response?.rate) {
             resolve(response.rate);
           } else {
@@ -83,7 +90,7 @@ async function getBtcRate() {
       );
     } catch (error) {
       clearTimeout(timeout);
-      console.error("[AtoB] Extension context error:", error);
+      console.error("[AtoB] Extension context error:", error.message);
       resolve(null);
     }
   });
@@ -93,16 +100,17 @@ async function getBtcRate() {
  * Currency detection regex patterns
  * Matches: $12.34, €12.34, EUR 12.34, £12.34, etc.
  * Handles comma and period as decimal separators, handles whitespace variations
+ * Pattern: optional thousands with separator, then optional decimal part
  */
 const PRICE_PATTERNS = [
-  // Symbol-based: $12.34, $12,34, € 12.34, etc. (with optional space)
-  /[$€£¥₹]\s*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/g,
-  // Currency code at start: USD 12.34, EUR12.34, GBP 12,34, etc.
-  /(USD|EUR|GBP|CAD|AUD|JPY|INR)\s*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/gi,
-  // Numbers with currency symbol after: 12.34$, 12.34€, 12,34 EUR, etc.
-  /([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)\s*[$€£¥₹]/g,
-  // Numbers with currency code after: 12.34 USD, 12.34EUR, 12,34 GBP, etc.
-  /([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)\s*(USD|EUR|GBP|CAD|AUD|JPY|INR)/gi,
+  // Symbol-based: $12.34, $ 12.34, €12,34, € 25.50
+  /[$€£¥₹]\s*([0-9]+(?:[,.][0-9]+)*)/g,
+  // Currency code at start: USD 12.34, EUR 25,50 (requires space)
+  /(USD|EUR|GBP|CAD|AUD|JPY|INR)\s+([0-9]+(?:[,.][0-9]+)*)/gi,
+  // Numbers with currency symbol after: 12.34$, 25,50€
+  /([0-9]+(?:[,.][0-9]+)*)\s*[$€£¥₹]/g,
+  // Numbers with currency code after: 12.34 USD, 25,50 GBP (requires space)
+  /([0-9]+(?:[,.][0-9]+)*)\s+(USD|EUR|GBP|CAD|AUD|JPY|INR)/gi,
 ];
 
 /**
@@ -165,6 +173,12 @@ async function getBtcRateForCurrency(currency) {
         },
         (response) => {
           clearTimeout(timeout);
+          // Check if extension context is still valid
+          if (chrome.runtime.lastError) {
+            console.error("[AtoB] Extension context error:", chrome.runtime.lastError.message);
+            resolve(null);
+            return;
+          }
           if (response?.rate) {
             resolve(response.rate);
           } else {
@@ -175,7 +189,7 @@ async function getBtcRateForCurrency(currency) {
       );
     } catch (error) {
       clearTimeout(timeout);
-      console.error("[AtoB] Extension context error:", error);
+      console.error("[AtoB] Extension context error:", error.message);
       resolve(null);
     }
   });
@@ -203,10 +217,17 @@ const processedNodes = new WeakSet();
 const replacedPrices = new Set();
 
 /**
- * Parse price amount from price match
+ * Parse price amount from price match or full price string
+ * Handles both "12.34" and "EUR12.34" or "$12.34"
  */
 function parsePrice(priceString) {
-  const normalized = priceString.replace(/[\s,]/g, "").replace(/^\./, "");
+  // Remove currency symbols and codes, keep only numbers and decimal points
+  const normalized = priceString
+    .replace(/[A-Z]/gi, '') // Remove currency codes (USD, EUR, etc)
+    .replace(/[$€£¥₹]/g, '') // Remove currency symbols
+    .replace(/[\s,]/g, '') // Remove spaces and thousand separators
+    .replace(/^\./, ''); // Remove leading decimal point
+
   const price = parseFloat(normalized);
   return (price > 0.01 && price < 1000000) ? price : null;
 }
@@ -214,6 +235,7 @@ function parsePrice(priceString) {
 /**
  * Reconstruct price from Amazon's multi-span structure
  * E.g., <span class="a-price-symbol">$</span><span class="a-price-whole">6</span><span class="a-price-decimal">.</span><span class="a-price-fraction">79</span>
+ * Also handles: <span class="a-price-whole">13<span class="a-price-decimal">.</span></span>
  */
 function reconstructPriceFromSpans(element) {
   const priceContainer = element.closest('[data-a-price], .a-price, [data-price]') || element.parentElement;
@@ -222,24 +244,31 @@ function reconstructPriceFromSpans(element) {
   const parts = [];
   let currency = null;
 
-  // Get all text from relevant spans
+  // Get symbol (usually currency code or symbol)
   const symbolSpan = priceContainer.querySelector('.a-price-symbol');
   if (symbolSpan) {
-    currency = getCurrencyFromMatch(symbolSpan.textContent);
-    parts.push(symbolSpan.textContent);
+    const symbolText = symbolSpan.textContent.trim();
+    currency = getCurrencyFromMatch(symbolText);
+    parts.push(symbolText);
   }
 
+  // Get the whole number part (may contain decimal span inside)
   const wholeSpan = priceContainer.querySelector('.a-price-whole');
   if (wholeSpan) {
-    // Include the whole part and any decimals within it
-    parts.push(wholeSpan.textContent);
+    // Use full textContent which includes nested decimal span
+    const wholeText = wholeSpan.textContent;
+    if (wholeText) {
+      parts.push(wholeText);
+    }
   }
 
+  // Get decimal point (but only if not already in whole span)
   const decimalSpan = priceContainer.querySelector('.a-price-decimal');
-  if (decimalSpan) {
+  if (decimalSpan && !wholeSpan?.contains(decimalSpan)) {
     parts.push(decimalSpan.textContent);
   }
 
+  // Get fraction part
   const fractionSpan = priceContainer.querySelector('.a-price-fraction');
   if (fractionSpan) {
     parts.push(fractionSpan.textContent);
@@ -279,16 +308,55 @@ async function replacePriceInSpans(priceInfo, btcRateCache) {
   const sats = toSats(price, btcRate);
   if (!sats) return false;
 
-  // Replace price with sats (original)
-  const replacement = `${formatSats(sats)} sats (${fullPrice})`;
+  // Create a new div with bold sats conversion on a new line
+  const satsDiv = document.createElement('div');
+  satsDiv.style.fontSize = 'inherit';
+  satsDiv.style.color = 'inherit';
+  satsDiv.style.fontFamily = 'inherit';
+  satsDiv.style.marginTop = '2px';
 
-  // Create a text node to replace the entire container
-  const textNode = document.createTextNode(replacement);
-  container.replaceWith(textNode);
+  const boldSpan = document.createElement('strong');
+  boldSpan.textContent = `${formatSats(sats)} sats`;
+  satsDiv.appendChild(boldSpan);
+
+  // Insert after the price container
+  if (container.parentElement) {
+    container.parentElement.insertAdjacentElement('afterend', satsDiv);
+  }
+
   replacedPrices.add(fullPrice);
 
-  console.log(`[AtoB] Replaced "${fullPrice}" with "${replacement}"`);
+  console.log(`[AtoB] Added sats for "${fullPrice}": ${formatSats(sats)} sats`);
   return true;
+}
+
+/**
+ * Find all price containers on the page
+ */
+function findAllPriceContainers(root) {
+  const containers = new Set();
+
+  // Find by Amazon price classes
+  document.querySelectorAll('.a-price-symbol, .a-price-whole, .a-price-fraction').forEach(el => {
+    const container = el.closest('[data-a-price], .a-price, [data-price]');
+    if (container) containers.add(container);
+  });
+
+  // Find by looking for elements that contain price patterns
+  document.querySelectorAll('span, div, p').forEach(el => {
+    if (!el.querySelector('script, style, noscript')) {
+      const text = el.textContent;
+      // Quick check if contains what looks like a price
+      if (/[$€£¥₹]|USD|EUR|GBP|JPY|INR/.test(text) && /[0-9]+[.,][0-9]+/.test(text)) {
+        // Check if it's a small, focused element (likely a price)
+        if (text.length < 100) {
+          containers.add(el);
+        }
+      }
+    }
+  });
+
+  return containers;
 }
 
 /**
@@ -296,75 +364,9 @@ async function replacePriceInSpans(priceInfo, btcRateCache) {
  */
 async function walkAndReplacePrices(node, btcRateCache) {
   if (node.nodeType === Node.TEXT_NODE) {
-    // Skip if already processed
-    if (processedNodes.has(node)) return;
-
-    let text = node.textContent;
-    let hasChanges = false;
-
-    // Try each price pattern
-    for (const pattern of PRICE_PATTERNS) {
-      let match;
-      const matches = [];
-
-      while ((match = pattern.exec(text)) !== null) {
-        // Extract the number part (could be in group 1 or 2 depending on pattern)
-        let priceStr = null;
-        for (let i = 1; i < match.length; i++) {
-          if (match[i] && /[0-9]/.test(match[i])) {
-            priceStr = match[i];
-            break;
-          }
-        }
-
-        matches.push({
-          fullMatch: match[0],
-          priceStr,
-          index: match.index,
-        });
-      }
-
-      // Process matches in reverse to maintain indices
-      for (let i = matches.length - 1; i >= 0; i--) {
-        const { fullMatch, priceStr } = matches[i];
-
-        // Skip if already replaced
-        if (replacedPrices.has(fullMatch)) continue;
-
-        const currency = getCurrencyFromMatch(fullMatch);
-        const price = parsePrice(priceStr);
-
-        if (!price || !currency) continue;
-
-        // Get BTC rate for this currency
-        if (!btcRateCache[currency]) {
-          btcRateCache[currency] = await getBtcRateForCurrency(currency);
-        }
-
-        const btcRate = btcRateCache[currency];
-        if (!btcRate) continue;
-
-        // Convert to sats
-        const sats = toSats(price, btcRate);
-        if (!sats) continue;
-
-        // Replace price with sats (original)
-        const replacement = `${formatSats(sats)} sats (${fullMatch})`;
-        text = text.replace(fullMatch, replacement);
-        replacedPrices.add(fullMatch);
-        hasChanges = true;
-
-        console.log(`[AtoB] Replaced "${fullMatch}" with "${replacement}"`);
-      }
-
-      pattern.lastIndex = 0;
-    }
-
-    // Update text node if changed
-    if (hasChanges) {
-      node.textContent = text;
-      processedNodes.add(node);
-    }
+    // Skip text nodes - span-based prices are handled separately
+    // Text node prices are harder to inject without breaking layout
+    processedNodes.add(node);
   } else if (
     node.nodeType === Node.ELEMENT_NODE &&
     !["SCRIPT", "STYLE", "NOSCRIPT"].includes(node.nodeName)
@@ -396,7 +398,65 @@ async function walkAndReplacePrices(node, btcRateCache) {
 async function injectBtcPrice() {
   try {
     const btcRateCache = {};
+
+    // First, handle Amazon's structured price elements
     await walkAndReplacePrices(document.body, btcRateCache);
+
+    // Then, catch any remaining prices by aggressive search
+    const priceContainers = findAllPriceContainers(document.body);
+    for (const container of priceContainers) {
+      if (!processedNodes.has(container)) {
+        // Try to extract price from this element
+        const text = container.textContent.trim();
+
+        // Try to find price pattern
+        for (const pattern of PRICE_PATTERNS) {
+          const match = pattern.exec(text);
+          if (match) {
+            const fullMatch = match[0];
+            if (!replacedPrices.has(fullMatch)) {
+              const currency = getCurrencyFromMatch(fullMatch);
+              const price = parsePrice(fullMatch);
+
+              if (price && currency) {
+                // Get BTC rate for this currency
+                if (!btcRateCache[currency]) {
+                  btcRateCache[currency] = await getBtcRateForCurrency(currency);
+                }
+
+                const btcRate = btcRateCache[currency];
+                if (btcRate) {
+                  const sats = toSats(price, btcRate);
+                  if (sats) {
+                    // Create a new div with bold sats
+                    const satsDiv = document.createElement('div');
+                    satsDiv.style.fontSize = 'inherit';
+                    satsDiv.style.color = 'inherit';
+                    satsDiv.style.fontFamily = 'inherit';
+                    satsDiv.style.marginTop = '2px';
+
+                    const boldSpan = document.createElement('strong');
+                    boldSpan.textContent = `${formatSats(sats)} sats`;
+                    satsDiv.appendChild(boldSpan);
+
+                    if (container.parentElement) {
+                      container.parentElement.insertAdjacentElement('afterend', satsDiv);
+                    }
+
+                    replacedPrices.add(fullMatch);
+                    processedNodes.add(container);
+                    console.log(`[AtoB] Added sats for "${fullMatch}": ${formatSats(sats)} sats`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          pattern.lastIndex = 0;
+        }
+      }
+    }
+
     console.log("[AtoB] Price injection complete");
   } catch (error) {
     console.error("[AtoB] Error injecting Bitcoin price:", error);
