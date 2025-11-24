@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopInBitcoin - Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .header .bitcoin-symbol {
+      color: #f7931a;
+      display: inline-block;
+      margin: 0 4px;
+    }
+
+    .header p {
+      font-size: 18px;
+      opacity: 0.9;
+      font-weight: 300;
+    }
+
+    .product-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      margin-bottom: 30px;
+    }
+
+    .product-header {
+      margin-bottom: 24px;
+    }
+
+    .product-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+
+    .product-description {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+    }
+
+    .price-section {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid #f7931a;
+    }
+
+    .price-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #666;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .original-price {
+      font-size: 18px;
+      color: #999;
+      text-decoration: line-through;
+      margin-bottom: 12px;
+    }
+
+    .bitcoin-price {
+      font-size: 28px;
+      font-weight: 700;
+      color: #f7931a;
+      font-family: "Courier New", monospace;
+      margin-bottom: 8px;
+    }
+
+    .bitcoin-price-subtitle {
+      font-size: 13px;
+      color: #666;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .price-breakdown {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid #e5e5e5;
+      margin-top: 16px;
+    }
+
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 13px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .breakdown-row:last-child {
+      border-bottom: none;
+    }
+
+    .breakdown-label {
+      color: #666;
+    }
+
+    .breakdown-value {
+      font-family: "Courier New", monospace;
+      font-weight: 500;
+      color: #1a1a1a;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .feature {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #e5e5e5;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      font-weight: 500;
+    }
+
+    .feature strong {
+      display: block;
+      color: #f7931a;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .footer {
+      text-align: center;
+      color: white;
+      margin-top: 40px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    @media (max-width: 480px) {
+      .header h1 {
+        font-size: 28px;
+      }
+
+      .header p {
+        font-size: 16px;
+      }
+
+      .bitcoin-price {
+        font-size: 24px;
+      }
+
+      .product-card {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ShopIn<span class="bitcoin-symbol">₿</span>itcoin</h1>
+      <p>See Amazon prices in Bitcoin</p>
+    </div>
+
+    <div class="product-card">
+      <div class="product-header">
+        <div class="product-title">Premium Wireless Headphones</div>
+        <div class="product-description">
+          High-quality noise-cancelling wireless headphones with 30-hour battery
+          life and premium sound quality.
+        </div>
+      </div>
+
+      <div class="price-section">
+        <div class="price-label">Original Price</div>
+        <div class="original-price">$249.99</div>
+
+        <div class="price-label">Bitcoin Price</div>
+        <div class="bitcoin-price">624,375 sats</div>
+        <div class="bitcoin-price-subtitle">at current BTC rate: $43,256.00</div>
+
+        <div class="price-breakdown">
+          <div class="breakdown-row">
+            <span class="breakdown-label">Amount in BTC</span>
+            <span class="breakdown-value">0.00624375</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">Original Price</span>
+            <span class="breakdown-value">$249.99 USD</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">Rate</span>
+            <span class="breakdown-value">1 BTC = $43,256.00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <strong>⚡</strong> Instant conversion
+        </div>
+        <div class="feature">
+          <strong>🌍</strong> Multi-currency
+        </div>
+        <div class="feature">
+          <strong>📊</strong> Live rates
+        </div>
+        <div class="feature">
+          <strong>🔒</strong> Privacy first
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>💙 ShopInBitcoin makes shopping on Amazon Bitcoin-friendly</p>
+    </div>
+  </div>
+</body>
+</html>

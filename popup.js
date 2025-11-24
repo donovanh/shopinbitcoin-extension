@@ -7,6 +7,9 @@ const rateElement = document.getElementById("rate");
 const updatedElement = document.getElementById("updated");
 const affiliateLink = document.getElementById("affiliateLink");
 const affiliateDisclosure = document.querySelector(".affiliate-disclosure");
+const extensionToggle = document.getElementById("extensionToggle");
+const copyButton = document.getElementById("copyButton");
+const bitcoinAddress = document.getElementById("bitcoinAddress");
 
 /**
  * Build affiliate link from current Amazon page
@@ -131,11 +134,62 @@ async function setupAffiliateLink() {
   }
 }
 
+/**
+ * Load extension enabled state from chrome storage
+ */
+async function loadExtensionState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['extensionEnabled'], (result) => {
+      const enabled = result.extensionEnabled !== false;
+      extensionToggle.checked = enabled;
+      resolve(enabled);
+    });
+  });
+}
+
+/**
+ * Save extension enabled state
+ */
+async function saveExtensionState(enabled) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ extensionEnabled: enabled }, resolve);
+  });
+}
+
+/**
+ * Copy bitcoin address to clipboard
+ */
+function copyToClipboard() {
+  const text = bitcoinAddress.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const originalText = copyButton.textContent;
+    copyButton.textContent = "Copied!";
+    setTimeout(() => {
+      copyButton.textContent = originalText;
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+  });
+}
+
 // Update rate immediately on open
 updateRate();
 
 // Setup affiliate link if available
 setupAffiliateLink();
+
+// Load extension state
+loadExtensionState();
+
+// Handle extension toggle
+extensionToggle.addEventListener('change', async (e) => {
+  await saveExtensionState(e.target.checked);
+  console.log('[ShopInBitcoin] Extension toggled:', e.target.checked);
+});
+
+// Handle copy button
+copyButton.addEventListener('click', copyToClipboard);
+bitcoinAddress.addEventListener('click', copyToClipboard);
 
 // Update rate every 60 seconds while popup is open
 const interval = setInterval(updateRate, 60000);

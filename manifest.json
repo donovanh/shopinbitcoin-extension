@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "See Amazon prices in Bitcoin/Satoshis on any Amazon store worldwide",
   "incognito": "not_allowed",
-  "permissions": ["scripting", "activeTab", "tabs"],
+  "permissions": ["activeTab", "tabs", "storage"],
   "background": {
     "service_worker": "service-worker.js"
   },

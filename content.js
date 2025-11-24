@@ -3,35 +3,6 @@
  * Content script that injects Bitcoin prices into Amazon product pages
  */
 
-// Inject styles into page
-function injectStyles() {
-  const style = document.createElement("style");
-  style.textContent = `
-    .atob-inline-price {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-      display: block;
-      font-size: 13px;
-      color: #555;
-      margin-top: 4px;
-    }
-
-    .atob-inline-price a {
-      color: #f7931a;
-      text-decoration: none;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .atob-inline-price a:hover {
-      text-decoration: underline;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// Inject styles immediately
-injectStyles();
-
 /**
  * Convert local currency to satoshis
  * @param {number} localAmount - Price in local currency
@@ -119,78 +90,89 @@ async function getBtcRate() {
 }
 
 /**
- * Extract all product prices from Amazon page DOM
- * @returns {Array} Array of {price, element} objects
+ * Currency detection regex patterns
+ * Matches: $12.34, €12.34, EUR 12.34, £12.34, etc.
  */
-function getAllAmazonPrices() {
-  const prices = [];
-  const seenTexts = new Set(); // Avoid duplicates (same price text)
+const PRICE_PATTERNS = [
+  // Symbol-based: $12.34, €12.34, £12.34, ¥12.34, ₹12.34
+  /[$€£¥₹]\s*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/g,
+  // Currency name: USD 12.34, EUR 12.34, GBP 12.34, JPY 12.34, etc.
+  /(USD|EUR|GBP|CAD|AUD|JPY|INR)\s+([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/gi,
+];
 
-  // Comprehensive selector list covering different Amazon layouts
-  const selectors = [
-    // Desktop product page - main price
-    "span.a-price.a-text-price.a-size-medium.a-color-base",
-    "span.a-price-whole",
-    "span[data-a-color='price']",
-    ".a-price-whole",
-    // Alternative markup variations
-    "span[data-a-price-whole]",
-    ".a-price .a-price-whole",
-    // Offer listings
-    "span.a-color-price",
-    // Any span with currency followed by number
-    "span[data-a-size-base][data-a-color-base]",
-  ];
+/**
+ * Extract currency from price match
+ */
+function getCurrencyFromMatch(match) {
+  if (!match) return null;
 
-  // Try each selector
-  for (const selector of selectors) {
-    const elements = document.querySelectorAll(selector);
+  // Check for currency symbol
+  if (match.includes('$')) return '$';
+  if (match.includes('€')) return '€';
+  if (match.includes('£')) return '£';
+  if (match.includes('¥')) return '¥';
+  if (match.includes('₹')) return '₹';
 
-    for (const element of elements) {
-      // Skip if already processed
-      if (processedElements.has(element)) continue;
+  // Check for currency code
+  const currencyMatch = match.match(/(USD|EUR|GBP|CAD|AUD|JPY|INR)/i);
+  return currencyMatch ? currencyMatch[1].toUpperCase() : null;
+}
 
-      // Skip hidden elements
-      if (element.offsetHeight === 0 || element.offsetWidth === 0) continue;
+/**
+ * Map currency to BTC rate pair
+ */
+function getCurrencyConfig(currency) {
+  const mappings = {
+    '$': { config: 'USD', pairs: ['XBTUSD'], keys: ['XXBTZUSD'] },
+    'USD': { config: 'USD', pairs: ['XBTUSD'], keys: ['XXBTZUSD'] },
+    '€': { config: 'EUR', pairs: ['XBTEUR'], keys: ['XXBTZEUR'] },
+    'EUR': { config: 'EUR', pairs: ['XBTEUR'], keys: ['XXBTZEUR'] },
+    '£': { config: 'GBP', pairs: ['XBTGBP'], keys: ['XXBTZGBP'] },
+    'GBP': { config: 'GBP', pairs: ['XBTGBP'], keys: ['XXBTZGBP'] },
+    '¥': { config: 'JPY', pairs: ['XBTJPY'], keys: ['XXBTZJPY'] },
+    'JPY': { config: 'JPY', pairs: ['XBTJPY'], keys: ['XXBTZJPY'] },
+    '₹': { config: 'INR', pairs: ['XBTINR'], keys: ['XXBTZINR'] },
+    'INR': { config: 'INR', pairs: ['XBTINR'], keys: ['XXBTZINR'] },
+  };
+  return mappings[currency];
+}
 
-      const text = element.textContent.trim();
+/**
+ * Get BTC rate for detected currency
+ */
+async function getBtcRateForCurrency(currency) {
+  const config = getCurrencyConfig(currency);
+  if (!config) return null;
 
-      // Skip if we've already found this price text (avoid duplicates)
-      if (seenTexts.has(text)) continue;
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      console.error("[AtoB] Service worker request timed out");
+      resolve(null);
+    }, 5000);
 
-      // Match currency symbol + number (allows for various formats)
-      const match = text.match(
-        /[^\d]*([0-9]{1,3}(?:[,. ][0-9]{3})*(?:[.,][0-9]{2})?)/
-      );
-
-      if (match && match[1]) {
-        // Normalize: remove spaces, convert comma to period for parsing
-        const normalized = match[1].replace(/[\s,]/g, "").replace(/^\./, "");
-        const price = parseFloat(normalized);
-
-        // Sanity check: price should be reasonable
-        if (price > 0.01 && price < 100000) {
-          seenTexts.add(text);
-          prices.push({ price, element });
-          console.log("[AtoB] Found price:", price, "in element:", element);
+    try {
+      chrome.runtime.sendMessage(
+        {
+          action: "getBtcRate",
+          krakenPair: config.pairs[0],
+          krakenKey: config.keys[0],
+        },
+        (response) => {
+          clearTimeout(timeout);
+          if (response?.rate) {
+            resolve(response.rate);
+          } else {
+            console.error("[AtoB] Failed to fetch BTC rate:", response?.error);
+            resolve(null);
+          }
         }
-      }
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error("[AtoB] Extension context error:", error);
+      resolve(null);
     }
-  }
-
-  // Debug: log what we're seeing
-  if (prices.length === 0) {
-    console.log(
-      "[AtoB] Price search - total elements checked:",
-      document.querySelectorAll("span").length
-    );
-    console.log(
-      "[AtoB] Visible spans:",
-      document.querySelectorAll("span:not([style*='display: none'])").length
-    );
-  }
-
-  return prices;
+  });
 }
 
 // Get ASIN from URL or page data
@@ -210,100 +192,133 @@ function getASIN() {
   return null;
 }
 
-// Create inline Bitcoin price text
-function createInlinePriceText(sats) {
-  const div = document.createElement("div");
-  div.className = "atob-inline-price";
-  div.setAttribute("data-atob-price", "true");
+// Keep track of processed text nodes to avoid duplicates
+const processedNodes = new WeakSet();
+const replacedPrices = new Set();
 
-  // Link to shopinbitcoin home page
-  // TODO: Direct product links via ASIN once shopinbitcoin.com/home/[ASIN] is ready
-  // const asin = getASIN();
-  // const shopLink = asin
-  //   ? `https://shopinbitcoin.com/home/${asin}`
-  //   : 'https://shopinbitcoin.com/';
-  const shopLink = "https://shopinbitcoin.com/";
-
-  div.innerHTML = `${formatSats(
-    sats
-  )} SATS - <a href="${shopLink}" target="_blank">shopinbitcoin.com</a>`;
-  return div;
+/**
+ * Parse price amount from price match
+ */
+function parsePrice(priceString) {
+  const normalized = priceString.replace(/[\s,]/g, "").replace(/^\./, "");
+  const price = parseFloat(normalized);
+  return (price > 0.01 && price < 1000000) ? price : null;
 }
 
-// Keep track of processed price elements to avoid duplicates
-const processedElements = new WeakSet();
+/**
+ * Process text nodes and replace prices
+ */
+async function walkAndReplacePrices(node, btcRateCache) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    // Skip if already processed
+    if (processedNodes.has(node)) return;
+
+    let text = node.textContent;
+    let hasChanges = false;
+
+    // Try each price pattern
+    for (const pattern of PRICE_PATTERNS) {
+      let match;
+      const matches = [];
+
+      while ((match = pattern.exec(text)) !== null) {
+        matches.push({
+          fullMatch: match[0],
+          priceStr: match[1] || match[2],
+          index: match.index,
+        });
+      }
+
+      // Process matches in reverse to maintain indices
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const { fullMatch, priceStr } = matches[i];
+
+        // Skip if already replaced
+        if (replacedPrices.has(fullMatch)) continue;
+
+        const currency = getCurrencyFromMatch(fullMatch);
+        const price = parsePrice(priceStr);
+
+        if (!price || !currency) continue;
+
+        // Get BTC rate for this currency
+        if (!btcRateCache[currency]) {
+          btcRateCache[currency] = await getBtcRateForCurrency(currency);
+        }
+
+        const btcRate = btcRateCache[currency];
+        if (!btcRate) continue;
+
+        // Convert to sats
+        const sats = toSats(price, btcRate);
+        if (!sats) continue;
+
+        // Replace price with sats (original)
+        const replacement = `${formatSats(sats)} sats (${fullMatch})`;
+        text = text.replace(fullMatch, replacement);
+        replacedPrices.add(fullMatch);
+        hasChanges = true;
+
+        console.log(`[AtoB] Replaced "${fullMatch}" with "${replacement}"`);
+      }
+
+      pattern.lastIndex = 0;
+    }
+
+    // Update text node if changed
+    if (hasChanges) {
+      node.textContent = text;
+      processedNodes.add(node);
+    }
+  } else if (
+    node.nodeType === Node.ELEMENT_NODE &&
+    !["SCRIPT", "STYLE", "NOSCRIPT"].includes(node.nodeName)
+  ) {
+    // Recursively process child nodes
+    for (let child of Array.from(node.childNodes)) {
+      await walkAndReplacePrices(child, btcRateCache);
+    }
+  }
+}
 
 // Main function - inject BTC prices to page
 async function injectBtcPrice() {
   try {
-    // Get BTC rate
-    const btcRate = await getBtcRate();
-    if (!btcRate) {
-      console.log("[AtoB] Could not fetch BTC rate");
-      return;
-    }
-
-    // Get config for this locale
-    const config = getLocaleConfig();
-    if (!config) {
-      console.log("[AtoB] Locale not supported (no Kraken API pair available)");
-      return;
-    }
-
-    // Get all product prices
-    const priceDataList = getAllAmazonPrices();
-    if (priceDataList.length === 0) {
-      console.log("[AtoB] Could not find any product prices");
-      return;
-    }
-
-    // Process each price
-    for (const { price: usdPrice, element: priceElement } of priceDataList) {
-      // Mark as processed
-      processedElements.add(priceElement);
-
-      // Convert to sats
-      const sats = toSats(usdPrice, btcRate);
-      if (!sats) {
-        console.log("[AtoB] Could not convert price to sats");
-        continue;
-      }
-
-      // Remove any existing price text we added next to this element
-      const existingPrice = priceElement.parentElement?.querySelector(
-        '[data-atob-price="true"]'
-      );
-      if (existingPrice) {
-        existingPrice.remove();
-      }
-
-      // Create and insert inline price text
-      const priceText = createInlinePriceText(sats);
-      if (priceElement && priceElement.parentElement) {
-        priceElement.parentElement.insertAdjacentElement("afterend", priceText);
-      } else {
-        document.body.insertAdjacentElement("afterbegin", priceText);
-      }
-
-      console.log("[AtoB] Bitcoin price injected:", formatSats(sats));
-    }
+    const btcRateCache = {};
+    await walkAndReplacePrices(document.body, btcRateCache);
+    console.log("[AtoB] Price injection complete");
   } catch (error) {
     console.error("[AtoB] Error injecting Bitcoin price:", error);
   }
+}
+
+// Check if extension is enabled before running
+async function checkAndInject() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['extensionEnabled'], (result) => {
+      const enabled = result.extensionEnabled !== false;
+      if (enabled) {
+        injectBtcPrice().then(resolve).catch(resolve);
+      } else {
+        console.log("[AtoB] Extension is disabled");
+        resolve();
+      }
+    });
+  });
 }
 
 // Run on page load with error boundary
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
     try {
-      injectBtcPrice();
+      checkAndInject();
     } catch (error) {
       console.error("[AtoB] Fatal error during page load injection:", error);
     }
   });
 } else {
   try {
-    injectBtcPrice();
+    checkAndInject();
   } catch (error) {
     console.error("[AtoB] Fatal error during initial injection:", error);
   }
@@ -316,7 +331,7 @@ try {
     clearTimeout(window.atobTimeout);
     window.atobTimeout = setTimeout(() => {
       try {
-        injectBtcPrice();
+        checkAndInject();
       } catch (error) {
         console.error("[AtoB] Error during dynamic injection:", error);
       }
